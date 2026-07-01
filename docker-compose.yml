@@ -1,0 +1,34 @@
+services:
+  floci:
+    image: floci/floci:latest
+    container_name: infraestructura-viva-floci
+    restart: unless-stopped
+    ports:
+      - "4566:4566"
+    volumes:
+      - floci_data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - FLOCI_DEFAULT_REGION=us-east-1
+      - FLOCI_HOSTNAME=floci
+      - FLOCI_STORAGE_MODE=hybrid
+
+  app:
+    build: .
+    container_name: infraestructura-viva-app
+    restart: unless-stopped
+    depends_on:
+      - floci
+    environment:
+      - FLOCI_ENDPOINT=http://floci:4566
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
+      - DB_MASTER_USER=admin_acme
+      - DB_MASTER_PASSWORD=changeme123
+    ports:
+      - "8000:8000"
+
+volumes:
+  floci_data:
+  
