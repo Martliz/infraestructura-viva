@@ -233,15 +233,47 @@ def cloudwatch_metrica_errores(cantidad: float):
     """
     aws_setup.put_error_metric(cantidad)
     return {"metrica": "ErrorCount", "valor_publicado": cantidad}
+
+
+@app.post("/cloudwatch/metrica-red")
+def cloudwatch_metrica_red(bytes_in: float):
+    """
+    Publica un dato de la métrica NetworkIn (tercera métrica clave del
+    plan de monitoreo, junto a CPU y errores, según pide la Lección 8).
+    """
+    aws_setup.put_network_metric(bytes_in)
+    return {"metrica": "NetworkIn", "valor_publicado": bytes_in}
+
+
 @app.post("/cloudwatch/simular-alarma")
 def cloudwatch_simular_alarma(alarma: str, estado: str = "ALARM"):
     """
-    Fuerza el estado de una alarma con SetAlarmState (Floci no evalúa
-    alarmas automáticamente en segundo plano como AWS real, así que esta
-    es la forma de disparar de verdad la notificación SNS configurada).
-    Usa 'InfraestructuraViva-CPUAlta' o 'InfraestructuraViva-ErroresApp'
-    como valor de 'alarma', y 'ALARM' u 'OK' como 'estado'.
+    Fuerza el estado de una alarma con SetAlarmState. Floci cambia el
+    estado pero, a diferencia de AWS real, no ejecuta las AlarmActions
+    configuradas (no publica en SNS por sí solo). Por eso, cuando el
+    nuevo estado es ALARM, este endpoint también publica la notificación
+    en el tema SNS directamente, replicando el comportamiento que tendría
+    AWS al disparar la acción de la alarma.
     """
     razon = f"Simulación manual del prototipo: umbral superado ({estado})"
     aws_setup.set_alarm_state(alarma, estado, razon)
-    return {"alarma": alarma, "nuevo_estado": estado}
+
+    resultado = {"alarma": alarma, "nuevo_estado": estado, "notificacion_sns": None}
+
+    if estado == "ALARM":
+        import boto3
+        sns = boto3.client(
+            "sns",
+            endpoint_url=aws_setup.FLOCI_ENDPOINT,
+            region_name=aws_setup.AWS_REGION,
+            aws_access_key_id=aws_setup.AWS_ACCESS_KEY,
+            aws_secret_access_key=aws_setup.AWS_SECRET_KEY,
+        )
+        resp = sns.publish(
+            TopicArn=AWS_RESOURCES["messaging"]["topic_arn"],
+            Subject=f"ALARMA: {alarma}",
+            Message=razon,
+        )
+        resultado["notificacion_sns"] = resp["MessageId"]
+
+    return resultado

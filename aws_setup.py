@@ -83,6 +83,8 @@ def ensure_messaging():
         QueueUrl=queue_url, AttributeNames=["QueueArn"]
     )["Attributes"]["QueueArn"]
 
+    # Suscribir la cola al tema (idempotente: AWS no duplica suscripciones
+    # exactamente iguales, pero por las dudas listamos antes de suscribir).
     existing = sns.list_subscriptions_by_topic(TopicArn=topic_arn).get(
         "Subscriptions", []
     )
@@ -258,6 +260,10 @@ APP_NAMESPACE = "InfraestructuraViva/Aplicacion"
 ERROR_METRIC = "ErrorCount"
 ERROR_DIMENSIONS = [{"Name": "Service", "Value": "api"}]
 
+NET_NAMESPACE = "InfraestructuraViva/Computo"
+NET_METRIC = "NetworkIn"
+NET_DIMENSIONS = [{"Name": "InstanceId", "Value": "app-instance"}]
+
 ALARM_CPU = "InfraestructuraViva-CPUAlta"
 ALARM_ERRORS = "InfraestructuraViva-ErroresApp"
 
@@ -331,6 +337,20 @@ def put_error_metric(count):
     )
 
 
+def put_network_metric(bytes_in):
+    """Tercera métrica del plan (CPU, red, errores) pedida por la Lección 8."""
+    cw = _client("cloudwatch")
+    cw.put_metric_data(
+        Namespace=NET_NAMESPACE,
+        MetricData=[{
+            "MetricName": NET_METRIC,
+            "Dimensions": NET_DIMENSIONS,
+            "Value": bytes_in,
+            "Unit": "Bytes",
+        }],
+    )
+
+
 def describe_alarms():
     cw = _client("cloudwatch")
     resp = cw.describe_alarms(AlarmNames=[ALARM_CPU, ALARM_ERRORS])
@@ -338,6 +358,8 @@ def describe_alarms():
         {"nombre": a["AlarmName"], "estado": a["StateValue"], "razon": a.get("StateReason")}
         for a in resp.get("MetricAlarms", [])
     ]
+
+
 def set_alarm_state(alarm_name, state, reason):
     """
     Fuerza el estado de una alarma con SetAlarmState. Floci no incluye un
@@ -353,6 +375,7 @@ def set_alarm_state(alarm_name, state, reason):
         StateReason=reason,
     )
     logger.info("Alarma '%s' forzada a estado %s", alarm_name, state)
+
 
 # ------------------------------------------------------------ Orquestador
 def provision_all():
