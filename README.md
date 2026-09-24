@@ -21,7 +21,7 @@ docker-prototipo/
 ## 2. Levantar el entorno
 
 ```bash
-cd docker-prototipo
+cd infraestructura-viva
 docker compose up --build
 ```
 
